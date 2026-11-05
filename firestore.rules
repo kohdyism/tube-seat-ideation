@@ -1,0 +1,35 @@
+rules_version = '2';
+// Security rules for the Tube Seat Ideation Map.
+// Paste into Firebase console > Firestore Database > Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Ideas: anyone can read; any signed-in visitor (anonymous auth) can add one.
+    // Only the person who added an idea can edit or delete it.
+    match /ideas/{ideaId} {
+      allow read: if true;
+      allow create: if validIdea() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if validIdea() && resource.data.createdBy == request.auth.uid
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Votes: one document per visitor, holding the ids of ideas they voted for.
+    // Everyone can read the tallies; each visitor can only write their own document.
+    match /votes/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.data.ideas is list
+                   && request.resource.data.ideas.size() <= 500;
+    }
+
+    function validIdea() {
+      let d = request.resource.data;
+      return request.auth != null
+        && d.text is string && d.text.size() > 0 && d.text.size() <= 4000
+        && d.avenues is list && d.avenues.size() >= 1 && d.avenues.size() <= 26
+        && d.dir in ['offer', 'request', 'both', 'ambient']
+        && d.tags is list && d.tags.size() <= 20;
+    }
+  }
+}
